@@ -272,6 +272,27 @@ The query is expected to be able to fail, in this situation, run HANDLER."
        tag]
       (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
 
+    (body-hash
+     ([(node-id :not-null)
+       (hash :not-null)]
+      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
+
+    (body-atime
+     ([(node-id :not-null)
+       (timestamp :not-null)]
+      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
+
+    (body-mtime
+     ([(node-id :not-null)
+       (timestamp :not-null)]
+      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
+
+    (last-linked
+     ([(node-id :not-null)
+       (timestamp :not-null)]
+      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
+
+
     (links
      ([(pos :not-null)
        (source :not-null)
