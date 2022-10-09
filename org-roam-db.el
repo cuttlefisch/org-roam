@@ -233,9 +233,9 @@ The query is expected to be able to fail, in this situation, run HANDLER."
       title
       (hash :not-null)
       (atime :not-null)
-      (body-hash :not-null)
-      (body-mtime :not-null)
-      (last-linked :not-null)
+      (body-hash)
+      (body-mtime)
+      (last-linked)
       (mtime :not-null)])
 
     (nodes
