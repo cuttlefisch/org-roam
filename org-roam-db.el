@@ -233,6 +233,9 @@ The query is expected to be able to fail, in this situation, run HANDLER."
       title
       (hash :not-null)
       (atime :not-null)
+      (body-hash :not-null)
+      (body-mtime :not-null)
+      (last-linked :not-null)
       (mtime :not-null)])
 
     (nodes
@@ -277,10 +280,13 @@ The query is expected to be able to fail, in this situation, run HANDLER."
        (hash :not-null)]
       (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
 
-    (body-atime
-     ([(node-id :not-null)
-       (timestamp :not-null)]
-      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
+    ;; REVIEW: body-atime might be redundant with regular atime already tracked.
+    ;; Instead of adding it as a field, maybe populate the PROPERTIES drawer by
+    ;; pulling from the atime table.
+    ;; (body-atime
+    ;;  ([(node-id :not-null)
+    ;;    (timestamp :not-null)]
+    ;;   (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
 
     (body-mtime
      ([(node-id :not-null)
@@ -379,6 +385,9 @@ If HASH is non-nil, use that as the file's hash without recalculating it."
          (attr (file-attributes file))
          (atime (file-attribute-access-time attr))
          (mtime (file-attribute-modification-time attr))
+         (body-hash (org-roam-db--body-hash file))
+         (body-mtime (org-property-values "last-modified"))
+         (last-linked (org-property-values "last-linked"))
          (hash (or hash (org-roam-db--file-hash file))))
     (org-roam-db-query
      [:insert :into files
@@ -635,6 +644,14 @@ INFO is the org-element parsed buffer."
     (insert-file-contents-literally file-path)
     (secure-hash 'sha1 (current-buffer))))
 
+(defun org-roam-db--body-hash (file-path)
+  "Compute the buffer-hash of FILE-PATH."
+  (with-temp-buffer
+    (let ((src-text (buffer-string)))
+      (with-temp-buffer
+        (insert (substring src-text (cl-search "#+title:" src-text)))
+        (buffer-hash)))))
+
 ;;;; Synchronization
 (defun org-roam-db-update-file (&optional file-path no-require)
   "Update Org-roam cache for FILE-PATH.
@@ -671,7 +688,12 @@ in `org-roam-db-sync'."
            (setq org-outline-path-cache nil)
            (setq info (org-element-parse-buffer))
            (org-roam-db-map-links
-            (list #'org-roam-db-insert-link))
+            (list #'org-roam-db-insert-link
+                  ;; TODO
+                  ;; basically this function needs to do an insert to update the last-linked time to
+                  ;; now, for any node it links to in its body contents.
+                  ;; #'org-roam-db-insert-last-linked
+                  ))
            (when (fboundp 'org-cite-insert)
              (require 'oc)             ;ensure feature is loaded
              (org-roam-db-map-citations
