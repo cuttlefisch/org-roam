@@ -594,10 +594,11 @@ INFO is the org-element parsed buffer."
     (goto-char (org-element-property :begin link))
     (let ((type (org-element-property :type link))
           (path (org-element-property :path link))
-          (source (org-roam-id-at-point))
+          (source (org-roam-id-at-point)) ;; NOTE: is this the id we need to update?
           (properties (list :outline (ignore-errors
                                        ;; This can error if link is not under any headline
                                        (org-get-outline-path 'with-self 'use-cache)))))
+
       ;; For Org-ref links, we need to split the path into the cite keys
       (when (and source path)
         (if (and (boundp 'org-ref-cite-types)
@@ -608,10 +609,36 @@ INFO is the org-element parsed buffer."
               :values $v1]
              (mapcar (lambda (k) (vector source k (point) properties))
                      (org-roam-org-ref-path-to-keys path)))
-          (org-roam-db-query
-           [:insert :into links
-            :values $v1]
-           (vector (point) source path type properties)))))))
+          ;; else
+          (progn
+            (if (eq type "id")
+                ;; if the link type is "id" insert into files new update time
+                ;; where node id equals dest id
+                ;;     UPDATE table_name
+                ;;     SET c1 = v1,
+                ;;         ...
+                ;;     WHERE condition;
+                ;; Get file by roam id
+                ;; with temporary buffer,
+                ;; replace the link time with current day
+                ;; do org roam file insert
+(let* ((file (caar (org-roam-db-query [:select file
+                                           :from nodes
+                                           :where (like id $r1)]
+                                          (concat "%" path "%"))))
+(content-hash (org-roam-db--file-hash file)))
+    (org-roam-with-file file nil
+    (org-set-property "last-linked" (format-time-string "%D" (file-attribute-modification-time (get-attrs))))
+    (emacsql-with-transaction (org-roam-db)
+      (org-with-wide-buffer
+           (org-roam-db-clear-file)
+           (org-roam-db-insert-file content-hash)
+       )))))
+            (org-roam-db-query
+               [:insert :into links
+                :values $v1]
+               (vector (point) source path type properties)))
+          )))))
 
 (defun org-roam-db-insert-citation (citation)
   "Insert data for CITATION at current point into the Org-roam cache."
