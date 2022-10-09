@@ -392,7 +392,7 @@ If HASH is non-nil, use that as the file's hash without recalculating it."
     (org-roam-db-query
      [:insert :into files
       :values $v1]
-     (list (vector file file-title hash atime mtime)))))
+     (list (vector file file-title hash atime mtime body-hash body-mtime last-linked)))))
 
 (defun org-roam-db-get-scheduled-time ()
   "Return the scheduled time at point in ISO8601 format."
