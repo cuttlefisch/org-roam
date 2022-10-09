@@ -233,10 +233,10 @@ The query is expected to be able to fail, in this situation, run HANDLER."
       title
       (hash :not-null)
       (atime :not-null)
+      (mtime :not-null)
       (body-hash :default "")
       (body-mtime :default "")
-      (last-linked :default "")
-      (mtime :not-null)])
+      (last-linked :default "")])
 
     (nodes
      ([(id :not-null :primary-key)
@@ -280,24 +280,10 @@ The query is expected to be able to fail, in this situation, run HANDLER."
        (hash :not-null)]
       (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
 
-    ;; REVIEW: body-atime might be redundant with regular atime already tracked.
-    ;; Instead of adding it as a field, maybe populate the PROPERTIES drawer by
-    ;; pulling from the atime table.
-    ;; (body-atime
-    ;;  ([(node-id :not-null)
-    ;;    (timestamp :not-null)]
-    ;;   (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
-
-    (body-mtime
-     ([(node-id :not-null)
-       (timestamp :not-null)]
-      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
-
     (last-linked
      ([(node-id :not-null)
        (timestamp :not-null)]
       (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
-
 
     (links
      ([(pos :not-null)
