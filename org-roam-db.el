@@ -687,6 +687,7 @@ INFO is the org-element parsed buffer."
     (unless (eq (org-property-values "hash") body-hash)
             (org-set-property "last-modified" (format-time-string "%D" (file-attribute-modification-time (file-attributes buffer-file-name))))
             (org-set-property "hash" body-hash)
+	    (save-buffer)
             nil)))
 
 ;;;; Synchronization
@@ -791,9 +792,9 @@ database, see `org-roam-db-sync' command."
     (cond
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
-      ;;(add-hook 'find-file-hook  #'org-roam-db--update-access-time)
+      (add-hook 'find-file-hook  #'org-roam-db--update-access-time)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
-      ;;(add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
+      (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
       (advice-add #'delete-file :before #'org-roam-db-autosync--delete-file-a)
       (org-roam-db-sync))
