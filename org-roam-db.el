@@ -371,7 +371,7 @@ If HASH is non-nil, use that as the file's hash without recalculating it."
          (attr (file-attributes file))
          (atime (file-attribute-access-time attr))
          (mtime (file-attribute-modification-time attr))
-         (body-hash (org-roam-db--body-hash file))
+         (body-hash (org-roam-db--body-hash))
          (body-mtime (org-property-values "last-modified"))
          (last-linked (org-property-values "last-linked"))
          (hash (or hash (org-roam-db--file-hash file))))
@@ -574,6 +574,20 @@ INFO is the org-element parsed buffer."
                             :values $v1]
                            rows)))))
 
+(defun org-roam-db--update-link-time-by-id (path _)
+  "Visit org roam node at ID and update its last-linked property, and make necessary cache updates."
+  (let* ((file (caar (org-roam-db-query [:select file
+                                         :from nodes
+                                         :where (like id $r1)]
+                                        (concat "%" path "%")))))
+    (org-roam-with-file file nil
+      (org-set-property "last-linked" (format-time-string "%D" (file-attribute-modification-time (file-attributes buffer-file-name)))))
+      (emacsql-with-transaction (org-roam-db)
+        (org-with-wide-buffer
+         (org-roam-db-clear-file)
+         (org-roam-db-insert-file)))
+      (save-buffer)))
+
 (defun org-roam-db-insert-link (link)
   "Insert link data for LINK at current point into the Org-roam cache."
   (save-excursion
@@ -597,33 +611,34 @@ INFO is the org-element parsed buffer."
                      (org-roam-org-ref-path-to-keys path)))
           ;; else
           (progn
-            (if (eq type "id")
-                ;; if the link type is "id" insert into files new update time
-                ;; where node id equals dest id
-                ;;     UPDATE table_name
-                ;;     SET c1 = v1,
-                ;;         ...
-                ;;     WHERE condition;
-                ;; Get file by roam id
-                ;; with temporary buffer,
-                ;; replace the link time with current day
-                ;; do org roam file insert
-(let* ((file (caar (org-roam-db-query [:select file
-                                           :from nodes
-                                           :where (like id $r1)]
-                                          (concat "%" path "%"))))
-(content-hash (org-roam-db--file-hash file)))
-    (org-roam-with-file file nil
-    (org-set-property "last-linked" (format-time-string "%D" (file-attribute-modification-time (get-attrs))))
-    (emacsql-with-transaction (org-roam-db)
-      (org-with-wide-buffer
-           (org-roam-db-clear-file)
-           (org-roam-db-insert-file content-hash)
-       )))))
+            ;; (if (eq type "id")
+            ;;     ;; if the link type is "id" insert into files new update time
+            ;;     ;; where node id equals dest id
+            ;;     ;;     UPDATE table_name
+            ;;     ;;     SET c1 = v1,
+            ;;     ;;         ...
+            ;;     ;;     WHERE condition;
+            ;;     ;; Get file by roam id
+            ;;     ;; with temporary buffer,
+            ;;     ;; replace the link time with current day
+            ;;     ;; do org roam file insert
+            ;;     ;; MARK: L :: Probably need to remove this after updating the node insert hook
+            ;;     (let* ((file (caar (org-roam-db-query [:select file
+            ;;                                            :from nodes
+            ;;                                            :where (like id $r1)]
+            ;;                                           (concat "%" path "%"))))
+            ;;            (content-hash (org-roam-db--file-hash file)))
+            ;;       (org-roam-with-file file nil
+            ;;         (org-set-property "last-linked" (format-time-string "%D" (file-attribute-modification-time (file-attributes buffer-file-name))))
+            ;;         (emacsql-with-transaction (org-roam-db)
+            ;;           (org-with-wide-buffer
+            ;;            (org-roam-db-clear-file)
+            ;;            (org-roam-db-insert-file content-hash)))
+            ;;            (save-buffer))))
             (org-roam-db-query
-               [:insert :into links
-                :values $v1]
-               (vector (point) source path type properties)))
+             [:insert :into links
+              :values $v1]
+             (vector (point) source path type properties)))
           )))))
 
 (defun org-roam-db-insert-citation (citation)
@@ -657,13 +672,22 @@ INFO is the org-element parsed buffer."
     (insert-file-contents-literally file-path)
     (secure-hash 'sha1 (current-buffer))))
 
-(defun org-roam-db--body-hash (file-path)
+(defun org-roam-db--body-hash ()
   "Compute the buffer-hash of FILE-PATH."
   (with-temp-buffer
     (let ((src-text (buffer-string)))
       (with-temp-buffer
         (insert (substring src-text (cl-search "#+title:" src-text)))
         (buffer-hash)))))
+
+(defun org-roam-db--update-buffer-stats (&optional prefix)
+  "Update the last-modified property if the body-hash changes."
+  (interactive)
+  (let ((body-hash (org-roam-db--body-hash)))
+    (unless (eq (org-property-values "hash") body-hash)
+            (org-set-property "last-modified" (format-time-string "%D" (file-attribute-modification-time (file-attributes buffer-file-name))))
+            (org-set-property "hash" body-hash)
+            nil)))
 
 ;;;; Synchronization
 (defun org-roam-db-update-file (&optional file-path no-require)
@@ -689,6 +713,7 @@ in `org-roam-db-sync'."
           (org-with-wide-buffer
            (org-set-regexps-and-options 'tags-only)
            (org-refresh-category-properties)
+           (org-roam-db--update-buffer-stats)
            (org-roam-db-clear-file)
            (org-roam-db-insert-file content-hash)
            (org-roam-db-insert-file-node)
@@ -746,6 +771,9 @@ If FORCE, force a rebuild of the cache from scratch."
            (lwarn 'org-roam :error "Failed to process %s with error %s, skipping..."
                   file (error-message-string err))))))))
 
+(defun org-roam-db--update-access-time ()
+    (org-set-property "last-accessed" (format-time-string "%D" (file-attribute-access-time (file-attributes buffer-file-name)))))
+
 ;;;###autoload
 (define-minor-mode org-roam-db-autosync-mode
   "Global minor mode to keep your Org-roam session automatically synchronized.
@@ -763,7 +791,9 @@ database, see `org-roam-db-sync' command."
     (cond
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
+      (add-hook 'find-file-hook  #'org-roam-db--update-access-time)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
+      (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
       (advice-add #'delete-file :before #'org-roam-db-autosync--delete-file-a)
       (org-roam-db-sync))
