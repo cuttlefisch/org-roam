@@ -586,7 +586,7 @@ INFO is the org-element parsed buffer."
         (org-with-wide-buffer
          (org-roam-db-clear-file)
          (org-roam-db-insert-file)))
-      (save-buffer))))
+      )))
 
 (defun org-roam-db-insert-link (link)
   "Insert link data for LINK at current point into the Org-roam cache."
@@ -791,9 +791,9 @@ database, see `org-roam-db-sync' command."
     (cond
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
-      (add-hook 'find-file-hook  #'org-roam-db--update-access-time)
+      ;;(add-hook 'find-file-hook  #'org-roam-db--update-access-time)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
-      (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
+      ;;(add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
       (advice-add #'delete-file :before #'org-roam-db-autosync--delete-file-a)
       (org-roam-db-sync))
