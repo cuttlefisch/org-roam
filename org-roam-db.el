@@ -581,12 +581,12 @@ INFO is the org-element parsed buffer."
                                          :where (like id $r1)]
                                         (concat "%" path "%")))))
     (org-roam-with-file file nil
-      (org-set-property "last-linked" (format-time-string "%D" (file-attribute-modification-time (file-attributes buffer-file-name)))))
+      (org-set-property "last-linked" (format-time-string "%D" (file-attribute-modification-time (file-attributes buffer-file-name))))
       (emacsql-with-transaction (org-roam-db)
         (org-with-wide-buffer
          (org-roam-db-clear-file)
          (org-roam-db-insert-file)))
-      (save-buffer)))
+      (save-buffer))))
 
 (defun org-roam-db-insert-link (link)
   "Insert link data for LINK at current point into the Org-roam cache."
