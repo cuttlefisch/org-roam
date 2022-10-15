@@ -646,7 +646,7 @@ INFO is the org-element parsed buffer."
     (secure-hash 'sha1 (current-buffer))))
 
 ;; Borrowed from http://xahlee.info/emacs/emacs/elisp_read_file_content.html
-(defun org-roam-db--get-string-from-file (file-path)
+(defun org-roam-db--get-string-of-file (file-path)
   "Return file content as string."
   (with-temp-buffer
     (insert-file-contents file-path)
@@ -656,7 +656,7 @@ INFO is the org-element parsed buffer."
   "Compute the buffer-hash of FILE-PATH."
   (setq file-path (or file-path (buffer-file-name (buffer-base-buffer))))
   (with-temp-buffer
-    (let ((src-text (org-roam-db--get-string-from-file file-path)))
+    (let ((src-text (org-roam-db--get-string-of-file file-path)))
       (with-temp-buffer
         ;(warn "body string:\n%s" (substring src-text (cl-search "#+title" src-text)))
         (insert (substring src-text (cl-search "#+title" src-text)))
@@ -676,9 +676,9 @@ INFO is the org-element parsed buffer."
       (unless (eq prev-body-hash body-hash)
                                         ;(warn "%s is not equal to %s" '(prev-body-hash body-hash))
         (org-set-property "last-modified" today)
-        (org-set-property "hash" body-hash))
+        (org-set-property "hash" body-hash)))
       (save-buffer)
-      nil)))
+      nil))
 
 ;;;; Synchronization
 (defun org-roam-db-update-file (&optional file-path no-require)
@@ -758,7 +758,9 @@ If FORCE, force a rebuild of the cache from scratch."
                   file (error-message-string err))))))))
 
 (defun org-roam-db--update-access-time ()
-  (org-set-property "last-accessed" (format-time-string "%D" (file-attribute-access-time (file-attributes buffer-file-name))))
+  (save-excursion
+    (goto-char (point-min)
+               (org-set-property "last-accessed" (format-time-string "%D" (file-attribute-access-time (file-attributes buffer-file-name))))))
   (save-buffer))
 
 ;;;###autoload
@@ -778,7 +780,6 @@ database, see `org-roam-db-sync' command."
     (cond
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
-      ;;(add-hook 'org-roam-find-file-hook  #'org-roam-db--update-buffer-stats)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
       (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
