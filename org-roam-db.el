@@ -587,6 +587,22 @@ INFO is the org-element parsed buffer."
          (org-roam-db-insert-file)))
       (save-buffer))))
 
+# TODO merge this and the org-roam-db--update-link-time-by-id function
+(defun org-roam-db--update-access-time-by-id (path &optional rest)
+  "Visit org roam node at ID and update its last-linked property, and make necessary cache updates."
+  (let* ((file (caar (org-roam-db-query [:select file
+                                         :from nodes
+                                         :where (like id $r1)]
+                                        (concat "%" path "%")))))
+    (org-roam-with-file file nil
+      (org-set-property "last-accessed" (format-time-string "%D" (file-attribute-modification-time (file-attributes buffer-file-name))))
+      (emacsql-with-transaction (org-roam-db)
+        (org-with-wide-buffer
+         (org-roam-db-clear-file)
+         (org-roam-db-insert-file)))
+      (save-buffer)))
+  nil)
+
 (defun org-roam-db-insert-link (link)
   "Insert link data for LINK at current point into the Org-roam cache."
   (save-excursion
@@ -608,11 +624,10 @@ INFO is the org-element parsed buffer."
               :values $v1]
              (mapcar (lambda (k) (vector source k (point) properties))
                      (org-roam-org-ref-path-to-keys path)))
-            (org-roam-db-query
-             [:insert :into links
-              :values $v1]
-             (vector (point) source path type properties))
-          )))))
+          (org-roam-db-query
+           [:insert :into links
+            :values $v1]
+           (vector (point) source path type properties)))))))
 
 (defun org-roam-db-insert-citation (citation)
   "Insert data for CITATION at current point into the Org-roam cache."
@@ -658,7 +673,6 @@ INFO is the org-element parsed buffer."
   (with-temp-buffer
     (let ((src-text (org-roam-db--get-string-of-file file-path)))
       (with-temp-buffer
-        ;(warn "body string:\n%s" (substring src-text (cl-search "#+title" src-text)))
         (insert (substring src-text (cl-search "#+title" src-text)))
         (buffer-hash)))))
 
@@ -667,18 +681,15 @@ INFO is the org-element parsed buffer."
   (interactive)
   (let ((body-hash (org-roam-db--body-hash))
         (prev-body-hash (car (org-property-values "hash")))
-        (today (format-time-string "%D" (file-attribute-access-time (file-attributes buffer-file-name)))))
+        (today (format-time-string "%D")))
     (save-excursion
       (goto-char (point-min))
-      (org-set-property "last-accessed" today)
-                                        ;(warn "Current hash:    %s" prev-body-hash)
-                                        ;(warn "New hash:    %s" body-hash)
-      (unless (eq prev-body-hash body-hash)
-                                        ;(warn "%s is not equal to %s" '(prev-body-hash body-hash))
+      (unless (string-equal prev-body-hash body-hash)
         (org-set-property "last-modified" today)
-        (org-set-property "hash" body-hash)))
-      (save-buffer)
-      nil))
+        (org-set-property "hash" body-hash))
+      (org-set-property "last-accessed" today))
+    (save-buffer)
+    nil))
 
 ;;;; Synchronization
 (defun org-roam-db-update-file (&optional file-path no-require)
@@ -757,12 +768,6 @@ If FORCE, force a rebuild of the cache from scratch."
            (lwarn 'org-roam :error "Failed to process %s with error %s, skipping..."
                   file (error-message-string err))))))))
 
-(defun org-roam-db--update-access-time ()
-  (save-excursion
-    (goto-char (point-min)
-               (org-set-property "last-accessed" (format-time-string "%D" (file-attribute-access-time (file-attributes buffer-file-name))))))
-  (save-buffer))
-
 ;;;###autoload
 (define-minor-mode org-roam-db-autosync-mode
   "Global minor mode to keep your Org-roam session automatically synchronized.
@@ -780,6 +785,7 @@ database, see `org-roam-db-sync' command."
     (cond
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
+      (add-hook 'org-roam-find-file-hook #'org-roam-db--update-buffer-stats)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
       (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
