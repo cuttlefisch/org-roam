@@ -608,36 +608,10 @@ INFO is the org-element parsed buffer."
               :values $v1]
              (mapcar (lambda (k) (vector source k (point) properties))
                      (org-roam-org-ref-path-to-keys path)))
-          ;; else
-          (progn
-            ;; (if (eq type "id")
-            ;;     ;; if the link type is "id" insert into files new update time
-            ;;     ;; where node id equals dest id
-            ;;     ;;     UPDATE table_name
-            ;;     ;;     SET c1 = v1,
-            ;;     ;;         ...
-            ;;     ;;     WHERE condition;
-            ;;     ;; Get file by roam id
-            ;;     ;; with temporary buffer,
-            ;;     ;; replace the link time with current day
-            ;;     ;; do org roam file insert
-            ;;     ;; MARK: L :: Probably need to remove this after updating the node insert hook
-            ;;     (let* ((file (caar (org-roam-db-query [:select file
-            ;;                                            :from nodes
-            ;;                                            :where (like id $r1)]
-            ;;                                           (concat "%" path "%"))))
-            ;;            (content-hash (org-roam-db--file-hash file)))
-            ;;       (org-roam-with-file file nil
-            ;;         (org-set-property "last-linked" (format-time-string "%D" (file-attribute-modification-time (file-attributes buffer-file-name))))
-            ;;         (emacsql-with-transaction (org-roam-db)
-            ;;           (org-with-wide-buffer
-            ;;            (org-roam-db-clear-file)
-            ;;            (org-roam-db-insert-file content-hash)))
-            ;;            (save-buffer))))
             (org-roam-db-query
              [:insert :into links
               :values $v1]
-             (vector (point) source path type properties)))
+             (vector (point) source path type properties))
           )))))
 
 (defun org-roam-db-insert-citation (citation)
@@ -694,13 +668,15 @@ INFO is the org-element parsed buffer."
   (let ((body-hash (org-roam-db--body-hash))
         (prev-body-hash (car (org-property-values "hash")))
         (today (format-time-string "%D" (file-attribute-access-time (file-attributes buffer-file-name)))))
-    (org-set-property "last-accessed" today)
-    ;(warn "Current hash:    %s" prev-body-hash)
-    ;(warn "New hash:    %s" body-hash)
-    (unless (eq prev-body-hash body-hash)
-      ;(warn "%s is not equal to %s" '(prev-body-hash body-hash))
-      (org-set-property "last-modified" today)
-      (org-set-property "hash" body-hash)
+    (save-excursion
+      (goto-char (point-min))
+      (org-set-property "last-accessed" today)
+                                        ;(warn "Current hash:    %s" prev-body-hash)
+                                        ;(warn "New hash:    %s" body-hash)
+      (unless (eq prev-body-hash body-hash)
+                                        ;(warn "%s is not equal to %s" '(prev-body-hash body-hash))
+        (org-set-property "last-modified" today)
+        (org-set-property "hash" body-hash))
       (save-buffer)
       nil)))
 
@@ -741,12 +717,7 @@ in `org-roam-db-sync'."
            (setq org-outline-path-cache nil)
            (setq info (org-element-parse-buffer))
            (org-roam-db-map-links
-            (list #'org-roam-db-insert-link
-                  ;; TODO
-                  ;; basically this function needs to do an insert to update the last-linked time to
-                  ;; now, for any node it links to in its body contents.
-                  ;; #'org-roam-db-insert-last-linked
-                  ))
+            (list #'org-roam-db-insert-link))
            (when (fboundp 'org-cite-insert)
              (require 'oc)             ;ensure feature is loaded
              (org-roam-db-map-citations
@@ -787,8 +758,8 @@ If FORCE, force a rebuild of the cache from scratch."
                   file (error-message-string err))))))))
 
 (defun org-roam-db--update-access-time ()
-    (org-set-property "last-accessed" (format-time-string "%D" (file-attribute-access-time (file-attributes buffer-file-name))))
-                      (save-buffer))
+  (org-set-property "last-accessed" (format-time-string "%D" (file-attribute-access-time (file-attributes buffer-file-name))))
+  (save-buffer))
 
 ;;;###autoload
 (define-minor-mode org-roam-db-autosync-mode
@@ -807,7 +778,7 @@ database, see `org-roam-db-sync' command."
     (cond
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
-      (add-hook 'org-roam-find-file-hook  #'org-roam-db--update-buffer-stats)
+      ;;(add-hook 'org-roam-find-file-hook  #'org-roam-db--update-buffer-stats)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
       (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
