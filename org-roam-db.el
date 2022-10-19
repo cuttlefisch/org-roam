@@ -573,16 +573,53 @@ INFO is the org-element parsed buffer."
                             :values $v1]
                            rows)))))
 
-(defun org-roam-db--update-link-time-by-id (id _)
+(defun org-roam-db--update-link-time-by-id (id &rest _)
   "Visit org roam node at ID and update its last-linked property, and make necessary cache updates."
-  (let* ((file (org-roam-node-file (org-roam-node-from-id id))))
-    (save-excursion
-      (with-temp-buffer
-        (unwind-protect
-            (insert-file-contents file)
+  ; TODO this seems messy
+
+  (save-excursion
+    (unless (eq 'string (type-of id))
+      (goto-char (org-element-property :begin id))
+      (setq id (org-element-property :path id))))
+
+  ; TODO: this needs to visit, update, and save the existing open file buffer OR
+  ; TODO Open the file in a temp buffer, update & write it.
+  (save-excursion
+    (let* ((node (org-roam-node-from-id id))
+          (node-file-buffer (get-file-buffer (org-roam-node-file node))))
+      (cond
+       (node-file-buffer
+        (set-buffer node-file-buffer)
+          (save-buffer)
           (goto-char (point-min))
           (org-set-property "last-linked" (format-time-string "%D"))
-          (write-file file))))))
+          (message "about to save to existing buffer:    %s" (current-buffer))
+          (save-buffer (current-buffer)))
+       (node
+        (with-file-contents! (org-roam-node-file node)
+          (save-buffer)
+          (goto-char (point-min))
+          (org-set-property "last-linked" (format-time-string "%D"))
+          (save-buffer))))))
+  ;; (setq id (cond
+  ;;           ((eq 'cons (type-of id_or_link))
+  ;;            (org-element-property :path id_or_link))
+  ;;           (t
+  ;;            id_or_link)))
+  ;; (when-let (node (org-roam-node-from-id id) )
+  ;;   (save-excursion
+  ;;     (if-let (node-file-buffer (get-file-buffer (org-roam-node-file node)))
+  ;;         (get-buffer)
+  ;;       (with-file-contents! (org-roam-node-file node)
+  ;;         (goto-char (point-min))
+  ;;         (org-set-property "last-linked" (format-time-string "%D"))
+  ;;         (save-buffer)))
+  ;;                                       ;(let* ((file (org-roam-node-file (org-roam-node-from-id id))))
+  ;;     ;; (unless (eq (buffer-file-name) file)
+  ;;     ;;   (message "File names weren't equal    %s    %s" (buffer-file-name) file)
+  ;;     ;;     (insert-file-contents file))
+  ;;     )))))
+nil)
 
 (defun org-roam-db--update-access-time-by-id ()
   "Update current buffer's last-accessed property, and make necessary cache updates."
@@ -590,9 +627,9 @@ INFO is the org-element parsed buffer."
   (message "buffer exists?: %s" (file-exists-p (buffer-file-name)))
   (when (file-exists-p (buffer-file-name))
     (save-excursion
+      (save-buffer)
       (goto-char (point-min))
       (org-set-property "last-accessed" (format-time-string "%D"))
-      ;; BUG this breaks
       (message "id being accesset:    %s" (car (org-property-values "id")))
       (if (and (file-exists-p (buffer-file-name))
                (org-roam-node-from-id (car (org-property-values "id"))))
@@ -605,7 +642,7 @@ INFO is the org-element parsed buffer."
     (goto-char (org-element-property :begin link))
     (let ((type (org-element-property :type link))
           (path (org-element-property :path link))
-          (source (org-roam-id-at-point)) ;; NOTE: is this the id we need to update?
+          (source (org-roam-id-at-point))
           (properties (list :outline (ignore-errors
                                        ;; This can error if link is not under any headline
                                        (org-get-outline-path 'with-self 'use-cache)))))
@@ -689,10 +726,11 @@ INFO is the org-element parsed buffer."
           (message "body-hash:    %s" body-hash)
           (message "prev-body-hash:    %s" prev-body-hash)
           (unless (and prev-body-hash (string-equal prev-body-hash body-hash))
-            (message "Hashes were different for:    " (current-buffer))
+            (message "Hashes were different for:    %s" (current-buffer))
             (org-set-property "hash" body-hash)
             (org-set-property "last-modified" today)))
-        (if (file-exists-p (org-roam-node-file (org-roam-node-from-id (car (org-property-values "id")))))
+        (if (and (file-exists-p (buffer-file-name))
+                 (org-roam-node-from-id (car (org-property-values "id"))))
             (save-buffer))))
   nil)
 
@@ -734,7 +772,8 @@ in `org-roam-db-sync'."
            (setq org-outline-path-cache nil)
            (setq info (org-element-parse-buffer))
            (org-roam-db-map-links
-            (list #'org-roam-db-insert-link))
+            (list #'org-roam-db-insert-link
+                  #'org-roam-db--update-link-time-by-id))
            (when (fboundp 'org-cite-insert)
              (require 'oc)             ;ensure feature is loaded
              (org-roam-db-map-citations
