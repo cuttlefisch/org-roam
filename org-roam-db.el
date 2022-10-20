@@ -585,7 +585,7 @@ INFO is the org-element parsed buffer."
   (save-excursion
     (let* ((node (org-roam-node-from-id id))
            (node-file-buffer (if node
-                               (get-file-buffer (org-roam-node-file node))
+                                 (get-file-buffer (org-roam-node-file node))
                                nil)))
       (cond
        (node-file-buffer
@@ -608,6 +608,7 @@ INFO is the org-element parsed buffer."
     (save-excursion
       (save-buffer)
       (goto-char (point-min))
+      ;; BUG: this inserts above existing property drawer in some cases
       (org-set-property "last-accessed" (format-time-string "%D"))
       (if (and (file-exists-p (buffer-file-name))
                (org-roam-node-from-id (car (org-property-values "id"))))
@@ -701,7 +702,6 @@ INFO is the org-element parsed buffer."
               (prev-body-hash (car (org-property-values "hash")))
               (today (format-time-string "%D")))
           (goto-char (point-min))
-          (org-set-property "last-accessed" today)
           (unless (and prev-body-hash (string-equal prev-body-hash body-hash))
             (org-set-property "hash" body-hash)
             (org-set-property "last-modified" today)))
@@ -807,12 +807,14 @@ database, see `org-roam-db-sync' command."
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
-      (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
+      (add-hook 'emacs-startup-hook #'org-roam-db-autosync--accesstime-on-visit-h)
       (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
       (advice-add #'delete-file :before #'org-roam-db-autosync--delete-file-a)
       (org-roam-db-sync))
      (t
+      (remove-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
+      (remove-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (remove-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
       (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
       (advice-remove #'rename-file #'org-roam-db-autosync--rename-file-a)
@@ -873,6 +875,10 @@ OLD-FILE is cleared from the database, and NEW-FILE-OR-DIR is added."
 (defun org-roam-db-autosync--try-update-on-save-h ()
   "If appropriate, update the database for the current file after saving buffer."
   (when org-roam-db-update-on-save (org-roam-db-update-file)))
+
+(defun org-roam-db-autosync--accesstime-on-visit-h ()
+  "Only start tracking access time after startup."
+  (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id))
 
 ;;; Diagnostics
 (defun org-roam-db-diagnose-node ()
