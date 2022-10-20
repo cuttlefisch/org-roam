@@ -31,6 +31,7 @@
 ;;; Code:
 (require 'org-roam)
 (defvar org-outline-path-cache)
+;;;###autoload
 
 ;;; Options
 (defcustom org-roam-database-connector 'sqlite
@@ -575,31 +576,44 @@ INFO is the org-element parsed buffer."
 
 (defun org-roam-db--update-link-time-by-id (id &rest _)
   "Visit org roam node at ID and update its last-linked property, and make necessary cache updates."
-  (save-excursion
-    (unless (eq 'string (type-of id))
-      (goto-char (org-element-property :begin id))
-      (setq id (org-element-property :path id))))
+
+  (message "DID WEE MAKE IT HERE?")
+  (if (member #'org-roam-db--update-link-time-by-id org-roam-post-node-insert-hook)
+      (message "we're in the right hook")
+      (save-excursion
+        (unless (eq 'string (type-of id))
+          (goto-char (org-element-property :begin id))
+          (setq id (org-element-property :path id))))
 
                                         ; REVIEW:     This needs to visit, update, and save the existing open file buffer OR
                                         ;             Open the file in a temp buffer, update & write it.
-  (save-excursion
-    (let* ((node (org-roam-node-from-id id))
-           (node-file-buffer (if node
-                                 (get-file-buffer (org-roam-node-file node))
-                               nil)))
-      (cond
-       (node-file-buffer
-        (set-buffer node-file-buffer)
-        (save-buffer)
-        (goto-char (point-min))
-        (org-set-property "last-linked" (format-time-string "%D"))
-        (save-buffer (current-buffer)))
-       (node
-        (with-file-contents! (org-roam-node-file node)
+    (save-excursion
+      (message "about to check for node existence")
+      (let* ((node (org-roam-node-from-id id))
+             (node-file-buffer (if node
+                                   (get-file-buffer (org-roam-node-file node))
+                                 nil)))
+        (cond
+         (node-file-buffer
+          (message "touching existing buffer for :    %s" (org-roam-node-file node))
+          (set-buffer node-file-buffer)
           (save-buffer)
           (goto-char (point-min))
           (org-set-property "last-linked" (format-time-string "%D"))
-          (save-buffer))))))
+          (save-buffer (current-buffer)))
+         (node
+          (message "no buffer open, but we have a node")
+          (with-temp-buffer
+                               (unwind-protect
+            (insert-file-contents (org-roam-node-file node))
+                                   (message "touching dedicated buffer for:    %s" (org-roam-node-file node))
+                                 (save-buffer)
+                                 (goto-char (point-min))
+                                 (org-set-property "last-linked" (format-time-string "%D"))
+                                 (save-buffer)
+                                 (kill-buffer))
+                               ))))))
+  (message "past the if clause")
   nil)
 
 (defun org-roam-db--update-access-time-by-id ()
@@ -749,7 +763,8 @@ in `org-roam-db-sync'."
            (setq info (org-element-parse-buffer))
            (org-roam-db-map-links
             (list #'org-roam-db-insert-link
-                  #'org-roam-db--update-link-time-by-id))
+                                        ;#'org-roam-db--update-link-time-by-id)
+                  ))
            (when (fboundp 'org-cite-insert)
              (require 'oc)             ;ensure feature is loaded
              (org-roam-db-map-citations
@@ -808,7 +823,6 @@ database, see `org-roam-db-sync' command."
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
       (add-hook 'emacs-startup-hook #'org-roam-db-autosync--accesstime-on-visit-h)
-      (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
       (advice-add #'delete-file :before #'org-roam-db-autosync--delete-file-a)
       (org-roam-db-sync))
@@ -878,7 +892,8 @@ OLD-FILE is cleared from the database, and NEW-FILE-OR-DIR is added."
 
 (defun org-roam-db-autosync--accesstime-on-visit-h ()
   "Only start tracking access time after startup."
-  (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id))
+  (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
+  (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id))
 
 ;;; Diagnostics
 (defun org-roam-db-diagnose-node ()
