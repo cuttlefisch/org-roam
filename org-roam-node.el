@@ -742,9 +742,11 @@ Assumes that the cursor was put where the link is."
         (when (and (org-in-regexp org-link-any-re 1)
                    (string-equal type "roam")
                    (setq node (save-match-data (org-roam-node-from-title-or-alias path))))
-          (replace-match (org-link-make-string
-                          (concat "id:" (org-roam-node-id node))
-                          (or desc path))))))))
+          (progn
+            (replace-match (org-link-make-string
+                            (concat "id:" (org-roam-node-id node))
+                            (or desc path)))
+            (org-roam-db--update-link-time-by-id (org-roam-node-id node))))))))
 
 (defun org-roam-link-replace-all ()
   "Replace all \"roam:\" links in buffer with \"id:\" links."

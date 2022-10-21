@@ -576,44 +576,31 @@ INFO is the org-element parsed buffer."
 
 (defun org-roam-db--update-link-time-by-id (id &rest _)
   "Visit org roam node at ID and update its last-linked property, and make necessary cache updates."
-
-  (message "DID WEE MAKE IT HERE?")
-  (if (member #'org-roam-db--update-link-time-by-id org-roam-post-node-insert-hook)
-      (message "we're in the right hook")
-      (save-excursion
-        (unless (eq 'string (type-of id))
-          (goto-char (org-element-property :begin id))
-          (setq id (org-element-property :path id))))
-
-                                        ; REVIEW:     This needs to visit, update, and save the existing open file buffer OR
-                                        ;             Open the file in a temp buffer, update & write it.
     (save-excursion
-      (message "about to check for node existence")
+      (unless (eq 'string (type-of id))
+        (goto-char (org-element-property :begin id))
+        (setq id (org-element-property :path id))))
+    (save-excursion
       (let* ((node (org-roam-node-from-id id))
              (node-file-buffer (if node
                                    (get-file-buffer (org-roam-node-file node))
                                  nil)))
         (cond
          (node-file-buffer
-          (message "touching existing buffer for :    %s" (org-roam-node-file node))
+          ;; Use an existing buffer is already visiting the file
           (set-buffer node-file-buffer)
           (save-buffer)
           (goto-char (point-min))
           (org-set-property "last-linked" (format-time-string "%D"))
           (save-buffer (current-buffer)))
          (node
+          ;; No buffers currently visiting file
           (message "no buffer open, but we have a node")
-          (with-temp-buffer
-                               (unwind-protect
-            (insert-file-contents (org-roam-node-file node))
-                                   (message "touching dedicated buffer for:    %s" (org-roam-node-file node))
-                                 (save-buffer)
-                                 (goto-char (point-min))
-                                 (org-set-property "last-linked" (format-time-string "%D"))
-                                 (save-buffer)
-                                 (kill-buffer))
-                               ))))))
-  (message "past the if clause")
+          (let ((file-path (org-roam-node-file node)))
+                (with-temp-file file-path
+                  (insert-file-contents file-path)
+              (goto-char (point-min))
+              (org-set-property "last-linked" (format-time-string "%D"))))))))
   nil)
 
 (defun org-roam-db--update-access-time-by-id ()
@@ -893,7 +880,8 @@ OLD-FILE is cleared from the database, and NEW-FILE-OR-DIR is added."
 (defun org-roam-db-autosync--accesstime-on-visit-h ()
   "Only start tracking access time after startup."
   (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
-  (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id))
+  (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
+  nil)
 
 ;;; Diagnostics
 (defun org-roam-db-diagnose-node ()
