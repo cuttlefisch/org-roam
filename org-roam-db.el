@@ -234,9 +234,10 @@ The query is expected to be able to fail, in this situation, run HANDLER."
       (hash :not-null)
       (atime :not-null)
       (mtime :not-null)
-      (body-hash :default "")
-      (body-mtime :default "")
-      (last-linked :default "")])
+      ;; (body-hash :default "")
+      ;; (body-mtime :default "")
+      ;; (last-linked :default "")
+      ])
 
     (nodes
      ([(id :not-null :primary-key)
@@ -273,16 +274,6 @@ The query is expected to be able to fail, in this situation, run HANDLER."
     (tags
      ([(node-id :not-null)
        tag]
-      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
-
-    (body-hash
-     ([(node-id :not-null)
-       (hash :not-null)]
-      (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
-
-    (last-linked
-     ([(node-id :not-null)
-       (timestamp :not-null)]
       (:foreign-key [node-id] :references nodes [id] :on-delete :cascade)))
 
     (links
@@ -371,14 +362,15 @@ If HASH is non-nil, use that as the file's hash without recalculating it."
          (attr (file-attributes file))
          (atime (file-attribute-access-time attr))
          (mtime (file-attribute-modification-time attr))
-         (body-hash (org-roam-db--body-hash))
-         (body-mtime (org-property-values "last-modified"))
-         (last-linked (org-property-values "last-linked"))
+         ;; (body-hash (org-roam-db--body-hash))
+         ;; (body-mtime (org-property-values "last-modified"))
+         ;; (last-linked (org-property-values "last-linked"))
          (hash (or hash (org-roam-db--file-hash file))))
     (org-roam-db-query
      [:insert :into files
       :values $v1]
-     (list (vector file file-title hash atime mtime body-hash body-mtime last-linked)))))
+     (list (vector file file-title hash atime mtime)))))
+     ;; (list (vector file file-title hash atime mtime body-hash body-mtime last-linked)))))
 
 (defun org-roam-db-get-scheduled-time ()
   "Return the scheduled time at point in ISO8601 format."
@@ -576,31 +568,30 @@ INFO is the org-element parsed buffer."
 
 (defun org-roam-db--update-link-time-by-id (id &rest _)
   "Visit org roam node at ID and update its last-linked property, and make necessary cache updates."
-    (save-excursion
-      (unless (eq 'string (type-of id))
-        (goto-char (org-element-property :begin id))
-        (setq id (org-element-property :path id))))
-    (save-excursion
-      (let* ((node (org-roam-node-from-id id))
-             (node-file-buffer (if node
-                                   (get-file-buffer (org-roam-node-file node))
-                                 nil)))
-        (cond
-         (node-file-buffer
-          ;; Use an existing buffer is already visiting the file
-          (set-buffer node-file-buffer)
-          (save-buffer)
+  (save-excursion
+    (unless (eq 'string (type-of id))
+      (goto-char (org-element-property :begin id))
+      (setq id (org-element-property :path id))))
+  (save-excursion
+    (let* ((node (org-roam-node-from-id id))
+           (node-file-buffer (if node
+                                 (get-file-buffer (org-roam-node-file node))
+                               nil)))
+      (cond
+       (node-file-buffer
+        ;; Use an existing buffer is already visiting the file
+        (with-current-buffer
+            (save-buffer)
           (goto-char (point-min))
           (org-set-property "last-linked" (format-time-string "%D"))
-          (save-buffer (current-buffer)))
-         (node
-          ;; No buffers currently visiting file
-          (message "no buffer open, but we have a node")
-          (let ((file-path (org-roam-node-file node)))
-                (with-temp-file file-path
-                  (insert-file-contents file-path)
-              (goto-char (point-min))
-              (org-set-property "last-linked" (format-time-string "%D"))))))))
+          (save-buffer (current-buffer))))
+       (node
+        ;; No buffers currently visiting file
+        (let ((file-path (org-roam-node-file node)))
+          (with-temp-file file-path
+            (insert-file-contents file-path)
+            (goto-char (point-min))
+            (org-set-property "last-linked" (format-time-string "%D"))))))))
   nil)
 
 (defun org-roam-db--update-access-time-by-id ()
