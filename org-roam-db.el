@@ -580,7 +580,7 @@ INFO is the org-element parsed buffer."
       (cond
        (node-file-buffer
         ;; Use an existing buffer is already visiting the file
-        (with-current-buffer
+        (with-current-buffer node-file-buffer
             (save-buffer)
           (goto-char (point-min))
           (org-set-property "last-linked" (format-time-string "%D"))
