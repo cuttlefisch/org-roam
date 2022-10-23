@@ -680,10 +680,10 @@ remove them when it is disabled."
     (cond
      (enabled
       (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
-      (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id))
+      (add-hook 'org-roam-post-node-insert-hook #'org-roam-node-update-link-time-by-id))
      (t
       (remove-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
-      (remove-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)))))
+      (remove-hook 'org-roam-post-node-insert-hook #'org-roam-node-update-link-time-by-id)))))
 
 (defun org-roam-node-update-access-time-by-id ()
   "Update current buffer's last-accessed property, and make necessary cache updates."
@@ -713,6 +713,12 @@ remove them when it is disabled."
       (let ((src-text (org-roam-node-get-string-of-file (or file-path nil))))
         (insert (substring src-text (cl-search "#+title" src-text)))
         (buffer-hash)))))
+
+(add-hook 'org-roam-find-file-hook #'org-roam-node-handle-modified-time-tracking-h)
+(defun org-roam-node-handle-modified-time-tracking-h ()
+  "Setup the current buffer to update the DB after saving the current file."
+  (when org-roam-node-track-node-stats
+        (add-hook 'after-save-hook #'org-roam-node-update-buffer-stats nil t)))
 
 (defun org-roam-node-update-buffer-stats (&optional prefix)
   "Runs in before-save-hook Update the last-modified property if the body-hash changes."
@@ -814,7 +820,7 @@ Assumes that the cursor was put where the link is."
             (replace-match (org-link-make-string
                             (concat "id:" (org-roam-node-id node))
                             (or desc path)))
-            (org-roam-db--update-link-time-by-id (org-roam-node-id node))))))))
+            (org-roam-node-update-link-time-by-id (org-roam-node-id node))))))))
 
 (defun org-roam-link-replace-all ()
   "Replace all \"roam:\" links in buffer with \"id:\" links."
@@ -844,6 +850,7 @@ Assumes that the cursor was put where the link is."
       (cond
        (node-file-buffer
         ;; Use an existing buffer is already visiting the file
+        (message "made it into the existing file buffer cond")
         (with-current-buffer node-file-buffer
             (save-buffer)
           (goto-char (point-min))
@@ -851,6 +858,7 @@ Assumes that the cursor was put where the link is."
           (save-buffer (current-buffer))))
        (node
         ;; No buffers currently visiting file
+        (message "made it into the existing file buffer cond")
         (let ((file-path (org-roam-node-file node)))
           (with-temp-file file-path
             (insert-file-contents file-path)

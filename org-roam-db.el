@@ -654,7 +654,6 @@ in `org-roam-db-sync'."
            (org-roam-db-clear-file)
            (org-roam-db-insert-file content-hash)
            (org-roam-db-insert-file-node)
-           (org-roam-db--update-buffer-stats)
            (setq org-outline-path-cache nil)
            (org-roam-db-map-nodes
             (list #'org-roam-db-insert-node-data
