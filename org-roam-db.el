@@ -566,47 +566,6 @@ INFO is the org-element parsed buffer."
                             :values $v1]
                            rows)))))
 
-(defun org-roam-db--update-link-time-by-id (id &rest _)
-  "Visit org roam node at ID and update its last-linked property, and make necessary cache updates."
-  (save-excursion
-    (unless (eq 'string (type-of id))
-      (goto-char (org-element-property :begin id))
-      (setq id (org-element-property :path id))))
-  (save-excursion
-    (let* ((node (org-roam-node-from-id id))
-           (node-file-buffer (if node
-                                 (get-file-buffer (org-roam-node-file node))
-                               nil)))
-      (cond
-       (node-file-buffer
-        ;; Use an existing buffer is already visiting the file
-        (with-current-buffer node-file-buffer
-            (save-buffer)
-          (goto-char (point-min))
-          (org-set-property "last-linked" (format-time-string "%D"))
-          (save-buffer (current-buffer))))
-       (node
-        ;; No buffers currently visiting file
-        (let ((file-path (org-roam-node-file node)))
-          (with-temp-file file-path
-            (insert-file-contents file-path)
-            (goto-char (point-min))
-            (org-set-property "last-linked" (format-time-string "%D"))))))))
-  nil)
-
-(defun org-roam-db--update-access-time-by-id ()
-  "Update current buffer's last-accessed property, and make necessary cache updates."
-  (when (file-exists-p (buffer-file-name))
-    (save-excursion
-      (save-buffer)
-      (goto-char (point-min))
-      ;; BUG: this inserts above existing property drawer in some cases
-      (org-set-property "last-accessed" (format-time-string "%D"))
-      (if (and (file-exists-p (buffer-file-name))
-               (org-roam-node-from-id (car (org-property-values "id"))))
-          (save-buffer))))
-  nil)
-
 (defun org-roam-db-insert-link (link)
   "Insert link data for LINK at current point into the Org-roam cache."
   (save-excursion
@@ -667,41 +626,6 @@ INFO is the org-element parsed buffer."
 ;; Borrowed from http://xahlee.info/emacs/emacs/elisp_read_file_content.html
 ;; REVIEW: Possible to remove this if there's a better way of
 ;; slicing the org file contents and returning a string
-(defun org-roam-db--get-string-of-file (file-path)
-  "Return file content as string."
-  (if (and file-path (file-exists-p file-path))
-      (save-excursion
-        (with-temp-buffer
-          (insert-file-contents file-path)
-          (buffer-string)))
-    ""))
-
-(defun org-roam-db--body-hash (&optional file-path)
-  "Compute the buffer-hash of FILE-PATH."
-  (setq file-path (or file-path (buffer-file-name (buffer-base-buffer))))
-  (save-excursion
-    (with-temp-buffer
-      (let ((src-text (org-roam-db--get-string-of-file (or file-path nil))))
-        (insert (substring src-text (cl-search "#+title" src-text)))
-        (buffer-hash)))))
-
-(defun org-roam-db--update-buffer-stats (&optional prefix)
-  "Runs in before-save-hook Update the last-modified property if the body-hash changes."
-  (interactive)
-  (if (org-roam-buffer-p)
-      (save-excursion
-        (let ((body-hash (org-roam-db--body-hash))
-              (prev-body-hash (car (org-property-values "hash")))
-              (today (format-time-string "%D")))
-          (goto-char (point-min))
-          (unless (and prev-body-hash (string-equal prev-body-hash body-hash))
-            (org-set-property "hash" body-hash)
-            (org-set-property "last-modified" today)))
-        (if (and (file-exists-p (buffer-file-name))
-                 (org-roam-node-from-id (car (org-property-values "id"))))
-            (save-buffer))))
-  nil)
-
 ;;;; Synchronization
 (defun org-roam-db-update-file (&optional file-path no-require)
   "Update Org-roam cache for FILE-PATH.
@@ -800,13 +724,13 @@ database, see `org-roam-db-sync' command."
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
-      (add-hook 'emacs-startup-hook #'org-roam-db-autosync--accesstime-on-visit-h)
+      ;; (add-hook 'emacs-startup-hook #'org-roam-db-autosync--accesstime-on-visit-h)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
       (advice-add #'delete-file :before #'org-roam-db-autosync--delete-file-a)
       (org-roam-db-sync))
      (t
-      (remove-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
-      (remove-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
+      ;; (remove-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
+      ;; (remove-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (remove-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
       (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
       (advice-remove #'rename-file #'org-roam-db-autosync--rename-file-a)
@@ -868,11 +792,11 @@ OLD-FILE is cleared from the database, and NEW-FILE-OR-DIR is added."
   "If appropriate, update the database for the current file after saving buffer."
   (when org-roam-db-update-on-save (org-roam-db-update-file)))
 
-(defun org-roam-db-autosync--accesstime-on-visit-h ()
-  "Only start tracking access time after startup."
-  (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
-  (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
-  nil)
+;; (defun org-roam-db-autosync--accesstime-on-visit-h ()
+;;   "Only start tracking access time after startup."
+;;   (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
+;;   (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
+;;   nil)
 
 ;;; Diagnostics
 (defun org-roam-db-diagnose-node ()
