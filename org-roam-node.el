@@ -679,10 +679,10 @@ remove them when it is disabled."
   (let ((enabled org-roam-db-autosync-mode))
     (cond
      (enabled
-      (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
+      (add-hook 'org-roam-find-file-hook #'org-roam-node-update-access-time-by-id)
       (add-hook 'org-roam-post-node-insert-hook #'org-roam-node-update-link-time-by-id))
      (t
-      (remove-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
+      (remove-hook 'org-roam-find-file-hook #'org-roam-node-update-access-time-by-id)
       (remove-hook 'org-roam-post-node-insert-hook #'org-roam-node-update-link-time-by-id)))))
 
 (defun org-roam-node-update-access-time-by-id ()
@@ -716,7 +716,7 @@ remove them when it is disabled."
 
 (add-hook 'org-roam-find-file-hook #'org-roam-node-handle-modified-time-tracking-h)
 (defun org-roam-node-handle-modified-time-tracking-h ()
-  "Setup the current buffer to update the DB after saving the current file."
+  "Setup the current buffer to update the buffer-stats after saving the current file."
   (when org-roam-node-track-node-stats
         (add-hook 'after-save-hook #'org-roam-node-update-buffer-stats nil t)))
 
@@ -725,7 +725,7 @@ remove them when it is disabled."
   (interactive)
   (if (org-roam-buffer-p)
       (save-excursion
-        (let ((body-hash (org-roam-db--body-hash))
+        (let ((body-hash (org-roam-node-body-hash))
               (prev-body-hash (car (org-property-values "hash")))
               (today (format-time-string "%D")))
           (goto-char (point-min))
