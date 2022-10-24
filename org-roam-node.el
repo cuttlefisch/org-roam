@@ -734,11 +734,11 @@ Remove them when it is disabled."
       (save-excursion
         (let ((body-hash (org-roam-node-body-hash))
               (prev-body-hash (car (org-property-values "hash")))
-              (today (org-roam-node-time-string-now)))
+              (time-string (org-roam-node-time-string-now)))
           (goto-char (point-min))
           (unless (and prev-body-hash (string-equal prev-body-hash body-hash))
             (org-set-property "hash" body-hash)
-            (org-set-property "last-modified" today)))
+            (org-set-property "last-modified" time-string)))
         (if (and (file-exists-p (buffer-file-name))
                  (org-roam-node-from-id (car (org-property-values "id"))))
             (save-buffer))))
@@ -844,7 +844,7 @@ Assumes that the cursor was put where the link is."
 
 
 (defun org-roam-node-update-link-time-by-id (id &rest _)
-  "Visit org roam node at ID and update its last-linked property, and make necessary cache updates."
+  "Visit org roam node at ID and update its last-linked property."
   (save-excursion
     (unless (eq 'string (type-of id))
       (goto-char (org-element-property :begin id))
