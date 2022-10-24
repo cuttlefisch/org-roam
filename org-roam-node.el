@@ -679,7 +679,7 @@ COMPLETION-A and COMPLETION-B are items in the form of
   "Return timestamp formatted according to `org-roam-node-buffer-stat-format-time-string'."
   (format-time-string org-roam-node-buffer-stat-format-time-string))
 
-(add-hook 'org-roam-db-autosync-mode-hook #'org-roam-node-handle-node-sync-hooks-h)
+(add-hook 'org-roam-mode-hook #'org-roam-node-handle-node-sync-hooks-h)
 (defun org-roam-node-handle-node-sync-hooks-h ()
   "Add node stat tracking hooks when `org-roam-db-autosync-mode' is enabled.
 Remove them when it is disabled."
