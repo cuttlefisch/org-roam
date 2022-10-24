@@ -1,4 +1,5 @@
 ;;; org-roam-db.el --- Org-roam database API -*- coding: utf-8; lexical-binding: t; -*-
+
 ;; Copyright © 2020-2022 Jethro Kuan <jethrokuan95@gmail.com>
 
 ;; Author: Jethro Kuan <jethrokuan95@gmail.com>
@@ -31,7 +32,6 @@
 ;;; Code:
 (require 'org-roam)
 (defvar org-outline-path-cache)
-;;;###autoload
 
 ;;; Options
 (defcustom org-roam-database-connector 'sqlite
@@ -233,11 +233,7 @@ The query is expected to be able to fail, in this situation, run HANDLER."
       title
       (hash :not-null)
       (atime :not-null)
-      (mtime :not-null)
-      ;; (body-hash :default "")
-      ;; (body-mtime :default "")
-      ;; (last-linked :default "")
-      ])
+      (mtime :not-null)])
 
     (nodes
      ([(id :not-null :primary-key)
@@ -362,15 +358,11 @@ If HASH is non-nil, use that as the file's hash without recalculating it."
          (attr (file-attributes file))
          (atime (file-attribute-access-time attr))
          (mtime (file-attribute-modification-time attr))
-         ;; (body-hash (org-roam-db--body-hash))
-         ;; (body-mtime (org-property-values "last-modified"))
-         ;; (last-linked (org-property-values "last-linked"))
          (hash (or hash (org-roam-db--file-hash file))))
     (org-roam-db-query
      [:insert :into files
       :values $v1]
      (list (vector file file-title hash atime mtime)))))
-     ;; (list (vector file file-title hash atime mtime body-hash body-mtime last-linked)))))
 
 (defun org-roam-db-get-scheduled-time ()
   "Return the scheduled time at point in ISO8601 format."
@@ -576,7 +568,6 @@ INFO is the org-element parsed buffer."
           (properties (list :outline (ignore-errors
                                        ;; This can error if link is not under any headline
                                        (org-get-outline-path 'with-self 'use-cache)))))
-
       ;; For Org-ref links, we need to split the path into the cite keys
       (when (and source path)
         (if (and (boundp 'org-ref-cite-types)
@@ -623,9 +614,6 @@ INFO is the org-element parsed buffer."
     (insert-file-contents-literally file-path)
     (secure-hash 'sha1 (current-buffer))))
 
-;; Borrowed from http://xahlee.info/emacs/emacs/elisp_read_file_content.html
-;; REVIEW: Possible to remove this if there's a better way of
-;; slicing the org file contents and returning a string
 ;;;; Synchronization
 (defun org-roam-db-update-file (&optional file-path no-require)
   "Update Org-roam cache for FILE-PATH.
@@ -650,7 +638,6 @@ in `org-roam-db-sync'."
           (org-with-wide-buffer
            (org-set-regexps-and-options 'tags-only)
            (org-refresh-category-properties)
-
            (org-roam-db-clear-file)
            (org-roam-db-insert-file content-hash)
            (org-roam-db-insert-file-node)
@@ -663,9 +650,7 @@ in `org-roam-db-sync'."
            (setq org-outline-path-cache nil)
            (setq info (org-element-parse-buffer))
            (org-roam-db-map-links
-            (list #'org-roam-db-insert-link
-                                        ;#'org-roam-db--update-link-time-by-id)
-                  ))
+            (list #'org-roam-db-insert-link))
            (when (fboundp 'org-cite-insert)
              (require 'oc)             ;ensure feature is loaded
              (org-roam-db-map-citations
@@ -723,13 +708,10 @@ database, see `org-roam-db-sync' command."
      (enabled
       (add-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
       (add-hook 'kill-emacs-hook #'org-roam-db--close-all)
-      ;; (add-hook 'emacs-startup-hook #'org-roam-db-autosync--accesstime-on-visit-h)
       (advice-add #'rename-file :after  #'org-roam-db-autosync--rename-file-a)
       (advice-add #'delete-file :before #'org-roam-db-autosync--delete-file-a)
       (org-roam-db-sync))
      (t
-      ;; (remove-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
-      ;; (remove-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
       (remove-hook 'find-file-hook  #'org-roam-db-autosync--setup-file-h)
       (remove-hook 'kill-emacs-hook #'org-roam-db--close-all)
       (advice-remove #'rename-file #'org-roam-db-autosync--rename-file-a)
@@ -790,12 +772,6 @@ OLD-FILE is cleared from the database, and NEW-FILE-OR-DIR is added."
 (defun org-roam-db-autosync--try-update-on-save-h ()
   "If appropriate, update the database for the current file after saving buffer."
   (when org-roam-db-update-on-save (org-roam-db-update-file)))
-
-;; (defun org-roam-db-autosync--accesstime-on-visit-h ()
-;;   "Only start tracking access time after startup."
-;;   (add-hook 'org-roam-find-file-hook #'org-roam-db--update-access-time-by-id)
-;;   (add-hook 'org-roam-post-node-insert-hook #'org-roam-db--update-link-time-by-id)
-;;   nil)
 
 ;;; Diagnostics
 (defun org-roam-db-diagnose-node ()
