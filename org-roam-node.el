@@ -136,13 +136,13 @@ This path is relative to `org-roam-directory'."
   :group 'org-roam
   :type 'string)
 
-(defcustom org-roam-node-track-node-stats t
+(defcustom org-roam-node-track-stats nil
   "If t, track node activity information in the PROPERTIES drawer of node files.
 Disable this if you only want minimal information in PROPERTIES."
   :type 'boolean
   :group 'org-roam)
 
-(defcustom org-roam-node-buffer-stat-format-time-string "%D"
+(defcustom org-roam-node-stat-format-time-string "%D"
   "Time-string passed to `format-time-string' when setting buffer stat properties."
   :type 'string
   :group 'org-roam)
@@ -677,13 +677,13 @@ COMPLETION-A and COMPLETION-B are items in the form of
 ;; ;; Track stats
 (defun org-roam-node-time-string-now ()
   "Return timestamp formatted according to `org-roam-node-buffer-stat-format-time-string'."
-  (format-time-string org-roam-node-buffer-stat-format-time-string))
+  (format-time-string org-roam-node-stat-format-time-string))
 
 (add-hook 'org-roam-mode-hook #'org-roam-node-handle-node-sync-hooks-h)
 (defun org-roam-node-handle-node-sync-hooks-h ()
-  "Add node stat tracking hooks when `org-roam-db-autosync-mode' is enabled.
+  "Add node stat tracking hooks when `org-roam-node-track-stats' is enabled.
 Remove them when it is disabled."
-  (let ((enabled org-roam-node-track-node-stats))
+  (let ((enabled org-roam-node-track-stats))
     (cond
      (enabled
       (add-hook 'org-roam-find-file-hook #'org-roam-node-update-access-time-by-id)
@@ -693,7 +693,7 @@ Remove them when it is disabled."
       (remove-hook 'org-roam-post-node-insert-hook #'org-roam-node-update-link-time-by-id)))))
 
 (defun org-roam-node-update-access-time-by-id ()
-  "Update current buffer's last-accessed property, and make necessary cache update."
+  "Update current buffer's `last-accessed' property."
   (when (file-exists-p (buffer-file-name))
     (save-excursion
       (goto-char (point-min))
@@ -723,11 +723,11 @@ Remove them when it is disabled."
 
 (add-hook 'org-roam-find-file-hook #'org-roam-node-handle-modified-time-tracking-h)
 (defun org-roam-node-handle-modified-time-tracking-h ()
-  "Setup the current buffer to update the buffer-stats after saving the current file."
-  (when org-roam-node-track-node-stats
-        (add-hook 'after-save-hook #'org-roam-node-update-buffer-stats nil t)))
+  "Setup the current buffer to update the node-stats after saving the current file."
+  (when org-roam-node-track-stats
+        (add-hook 'after-save-hook #'org-roam-node-update-stats nil t)))
 
-(defun org-roam-node-update-buffer-stats ()
+(defun org-roam-node-update-stats ()
   "Update the `last-modified' property upon change to `body-hash'."
   (interactive)
   (if (org-roam-buffer-p)
