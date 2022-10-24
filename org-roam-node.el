@@ -683,7 +683,7 @@ COMPLETION-A and COMPLETION-B are items in the form of
 (defun org-roam-node-handle-node-sync-hooks-h ()
   "Add node stat tracking hooks when `org-roam-db-autosync-mode' is enabled.
 Remove them when it is disabled."
-  (let ((enabled org-roam-db-autosync-mode))
+  (let ((enabled org-roam-node-track-node-stats))
     (cond
      (enabled
       (add-hook 'org-roam-find-file-hook #'org-roam-node-update-access-time-by-id)
