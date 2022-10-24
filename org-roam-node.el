@@ -136,11 +136,15 @@ This path is relative to `org-roam-directory'."
   :group 'org-roam
   :type 'string)
 
-
 (defcustom org-roam-node-track-node-stats t
   "If t, track node activity information in the PROPERTIES drawer of node files.
 Disable this if you only want minimal information in PROPERTIES."
   :type 'boolean
+  :group 'org-roam)
+
+(defcustom org-roam-node-buffer-stat-format-time-string "%D"
+  "Time-string passed to `format-time-string' when setting buffer stat properties."
+  :type 'string
   :group 'org-roam)
 
 (defvar org-roam-node-history nil
@@ -671,11 +675,14 @@ COMPLETION-A and COMPLETION-B are items in the form of
   "")
 
 ;; ;; Track stats
+(defun org-roam-node-time-string-now ()
+  "Return timestamp formatted according to `org-roam-node-buffer-stat-format-time-string'."
+  (format-time-string org-roam-node-buffer-stat-format-time-string))
 
 (add-hook 'org-roam-db-autosync-mode-hook #'org-roam-node-handle-node-sync-hooks-h)
 (defun org-roam-node-handle-node-sync-hooks-h ()
-  "Add node stat tracking hooks when org-roam-db-autosync-mode is enabled,
-remove them when it is disabled."
+  "Add node stat tracking hooks when `org-roam-db-autosync-mode' is enabled.
+Remove them when it is disabled."
   (let ((enabled org-roam-db-autosync-mode))
     (cond
      (enabled
@@ -686,18 +693,18 @@ remove them when it is disabled."
       (remove-hook 'org-roam-post-node-insert-hook #'org-roam-node-update-link-time-by-id)))))
 
 (defun org-roam-node-update-access-time-by-id ()
-  "Update current buffer's last-accessed property, and make necessary cache updates."
+  "Update current buffer's last-accessed property, and make necessary cache update."
   (when (file-exists-p (buffer-file-name))
     (save-excursion
       (goto-char (point-min))
-      (org-set-property "last-accessed" (format-time-string "%D"))
+      (org-set-property "last-accessed" (org-roam-node-time-string-now))
       (if (and (file-exists-p (buffer-file-name))
                (org-roam-node-from-id (car (org-property-values "id"))))
           (save-buffer))))
   nil)
 
 (defun org-roam-node-get-string-of-file (file-path)
-  "Return file content as string."
+  "Return content of file at FILE-PATH as a string."
   (if (and file-path (file-exists-p file-path))
       (save-excursion
         (with-temp-buffer
@@ -706,7 +713,7 @@ remove them when it is disabled."
     ""))
 
 (defun org-roam-node-body-hash (&optional file-path)
-  "Compute the buffer-hash of FILE-PATH."
+  "Compute the `buffer-hash' of FILE-PATH."
   (setq file-path (or file-path (buffer-file-name (buffer-base-buffer))))
   (save-excursion
     (with-temp-buffer
@@ -720,14 +727,14 @@ remove them when it is disabled."
   (when org-roam-node-track-node-stats
         (add-hook 'after-save-hook #'org-roam-node-update-buffer-stats nil t)))
 
-(defun org-roam-node-update-buffer-stats (&optional prefix)
-  "Runs in before-save-hook Update the last-modified property if the body-hash changes."
+(defun org-roam-node-update-buffer-stats ()
+  "Update the `last-modified' property upon change to `body-hash'."
   (interactive)
   (if (org-roam-buffer-p)
       (save-excursion
         (let ((body-hash (org-roam-node-body-hash))
               (prev-body-hash (car (org-property-values "hash")))
-              (today (format-time-string "%D")))
+              (today (org-roam-node-time-string-now)))
           (goto-char (point-min))
           (unless (and prev-body-hash (string-equal prev-body-hash body-hash))
             (org-set-property "hash" body-hash)
@@ -850,20 +857,18 @@ Assumes that the cursor was put where the link is."
       (cond
        (node-file-buffer
         ;; Use an existing buffer is already visiting the file
-        (message "made it into the existing file buffer cond")
         (with-current-buffer node-file-buffer
             (save-buffer)
           (goto-char (point-min))
-          (org-set-property "last-linked" (format-time-string "%D"))
+          (org-set-property "last-linked" (org-roam-node-time-string-now))
           (save-buffer (current-buffer))))
        (node
         ;; No buffers currently visiting file
-        (message "made it into the existing file buffer cond")
         (let ((file-path (org-roam-node-file node)))
           (with-temp-file file-path
             (insert-file-contents file-path)
             (goto-char (point-min))
-            (org-set-property "last-linked" (format-time-string "%D"))))))))
+            (org-set-property "last-linked" (org-roam-node-time-string-now))))))))
   nil)
 
 ;;;;;; Completion-at-point interface
